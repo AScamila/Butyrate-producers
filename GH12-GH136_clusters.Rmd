@@ -1,0 +1,840 @@
+---
+title: "GH112-GH136 Clusters"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+```{r}
+library(dplyr)
+library(Biostrings)
+library(ztable)
+library("wesanderson")
+library(seqinr)
+install.packages("tidyverse")
+library(tidyverse)
+library(reshape2)
+library(plyr)
+library(ggplot2)
+library(dplyr )
+library(reshape)
+library(vegan)
+library(ape)
+library(dplyr)
+library(plyr)
+install.packages("reshape2") # may already be installed
+library(reshape2)
+library(readr)
+library(xlsx)
+```
+
+
+#No filter by completness
+```{r}
+Blast_GH112_136XY<-read.table("/Volumes/xhf865/Butyrate_producers/Table_Results/Roseburia_SGB_out.txt")
+colnames(Blast_GH112_136XY)<-c("qseqid", "sseqid", "slen", "qlen", "qstart", "qend" ,"qseq" ,"sstart", "send", "sseq" ,"length" ,"nident", "pident", "positive" ,"ppos" ,"mismatch" ,"gapopen", "gaps", "evalue" ,"bitscore")
+
+Blast_GH112_136XY$protein<-sapply(strsplit(as.character(Blast_GH112_136XY$qseqid), "_"), `[`, 1)
+Blast_GH112_136XY$SGB<-sapply(strsplit(as.character(Blast_GH112_136XY$sseqid), "_"), `[`, 1)
+Blast_GH112_136XY$pident2<-(Blast_GH112_136XY$pident*(Blast_GH112_136XY$length-Blast_GH112_136XY$mismatch))/Blast_GH112_136XY$qlen
+Blast_GH112_136XY$Ref_genome<-paste(sapply(strsplit(as.character(Blast_GH112_136XY$qseqid), "_"), `[`, 2),sapply(strsplit(as.character(Blast_GH112_136XY$qseqid), "_"), `[`, 3), sep="_")
+#Check for completed genes
+for (i in 1:nrow(Blast_GH112_136XY)){
+  
+  seq<-as.character(Blast_GH112_136XY$sseq[i])
+  length_seq<-Blast_GH112_136XY$length[i]
+  start_seq<-substr(seq,1,3)
+  end_seq<-substr(seq,(length_seq-2),length_seq)
+  Blast_GH112_136XY$start_seq[i]<-start_seq
+   Blast_GH112_136XY$end_seq[i]<-end_seq
+  if(start_seq=="ATG" & end_seq%in%c("TAG","TAA","TGA")
+     ){Blast_GH112_136XY$completed[i]="Yes"}else{Blast_GH112_136XY$completed[i]="No"}
+  
+}
+rm(seq,length_seq, end_seq, start_seq,i)
+
+ztable(table(Blast_GH112_136XY$SGB,Blast_GH112_136XY$protein))
+ztable(table(Blast_GH112_136XY$SGB,Blast_GH112_136XY$Ref_genome))
+table(Blast_GH112_136XY$SGB,Blast_GH112_136XY$completed)
+table(Blast_GH112_136XY$protein,Blast_GH112_136XY$completed)
+table(Blast_GH112_136XY$SGB,Blast_GH112_136XY$protein, Blast_GH112_136XY$Ref_genome, Blast_GH112_136XY$completed)
+
+blast_SGB_Prot<-as.data.frame(unclass(table(Blast_GH112_136XY$SGB,Blast_GH112_136XY$protein)))
+blast_SGB_ref_genome<-as.data.frame(unclass(table(Blast_GH112_136XY$SGB,Blast_GH112_136XY$Ref_genome)))
+df.complete<-as.data.frame(unclass(table(Blast_GH112_136XY$SGB,Blast_GH112_136XY$completed)))
+ggplot(data=Blast_GH112_136XY, aes(Blast_GH112_136XY$pident2)) + geom_histogram(bins=20) +theme_bw()+xlab("%Id")
+#filter for completeness
+Blast_GH112_136XY_completed<-Blast_GH112_136XY
+df.complete_prot<-as.data.frame(unclass(table(Blast_GH112_136XY_completed$SGB, Blast_GH112_136XY_completed$protein)))
+
+ggplot(data=Blast_GH112_136XY_completed, aes(Blast_GH112_136XY_completed$pident2)) + geom_histogram(bins=35) +theme_bw()+xlab("%Id")
+
+ztable(table(Blast_GH112_136XY_completed$SGB,Blast_GH112_136XY_completed$protein))
+
+#filter by ID
+Blast_GH112_136XY_completed<-filter(Blast_GH112_136XY_completed, pident2>=70)
+
+ztable(table(Blast_GH112_136XY_completed$SGB,Blast_GH112_136XY_completed$protein))
+
+ztable(table(Blast_GH112_136XY_completed$SGB,Blast_GH112_136XY_completed$Ref_genome))
+
+
+Blast_GH112_uniqs<-Blast_GH112_136XY_completed %>% select(sseqid, SGB, protein)
+Blast_GH112_uniqs$unique <- !(duplicated(Blast_GH112_uniqs) | duplicated(Blast_GH112_uniqs, fromLast = TRUE))
+
+ztable(table(Blast_GH112_uniqs$SGB,Blast_GH112_uniqs$protein))
+
+#Blast_GH112_uniqs_filt<-Blast_GH112_uniqs[-c(951, 959),]
+Blast_GH112_uniqs_filt<-Blast_GH112_uniqs
+Blast_GH112_uniqs_filt$sseqid<-as.character(Blast_GH112_uniqs_filt$sseqid)
+
+
+Blast_uniq<-data.frame(unclass(table(Blast_GH112_uniqs_filt$SGB,Blast_GH112_uniqs_filt$protein)))
+
+contings_Blast70 <-as.character(unique(Blast_GH112_uniqs_filt$sseqid))
+SGB_70<-as.character(unique(Blast_GH112_uniqs_filt$SGB))
+SGB_70_filt<-SGB_70[-c(7,10,11,12)]
+Blast_uniq$GH136xy<-NA
+Blast_uniq$GH112_GH136xy<-NA
+Blast_uniq$GH112_GH136<-NA
+table_contig_all<-data.frame(GH112=NA, GH136X=NA,GH136Y=NA, Sum_GH112_GH136xy=NA,Sum_GH1361=NA,Sum_GH1362=NA,Sum_GH112_GH136=NA)
+for(s in 1:length(SGB_70_filt)){
+  sgb<- SGB_70_filt[s]
+  df.sgb<-Blast_GH112_uniqs_filt %>% filter(SGB==sgb)
+  table_contig<-as.data.frame(unclass(table(as.character(df.sgb$sseqid),df.sgb$protein)))
+  table_contig$Sum_GH112_GH136xy<-rowSums(table_contig)
+  table_contig$Sum_GH1361<-rowSums(table_contig[2:3])
+  table_contig$Sum_GH1362<-table_contig$Sum_GH1361
+  table_contig$Sum_GH1362[table_contig$Sum_GH1362 >0] <- 1
+  table_contig$Sum_GH112_GH136<-rowSums(table_contig[,c(1,6)])
+  GH112_GH136xy<-length(which(table_contig$Sum_GH112_GH136xy==3))
+  GH112_GH136<-length(which(table_contig$Sum_GH112_GH136==2))
+  GH136xy<-length(which(table_contig$Sum_GH1361>0))
+  #table_contig
+  table_contig_all<-rbind(table_contig_all,table_contig)
+  Blast_uniq[sgb,"GH136xy"]<-GH136xy
+  Blast_uniq[sgb,"GH112_GH136xy"]<-GH112_GH136xy
+  Blast_uniq[sgb,"GH112_GH136"]<-GH112_GH136
+  
+}
+rm(table_contig,GH112_GH136xy,GH112_GH136,sgb,df.sgb)
+table_contig_all<-table_contig_all[-1,]
+table_contig_all$Contig<-row.names(table_contig_all)
+Blast_uniq_filt<-Blast_uniq[-c(1,6,8,12),]
+
+table_contig_all<-table_contig_all %>% filter(!Contig %in% c("4940_NODE_117_length_68058_cov_53.4045","4940_NODE_128_length_44070_cov_9.95711"))
+row.names(table_contig_all)<-table_contig_all$Contig
+#####Contigs to continue the annotation
+contigs_filt<-rownames(table_contig_all[((which(table_contig_all$Sum_GH112_GH136==2))),])
+
+#Filter for GH112 the most conserved
+Blast_GH112<-subset(Blast_GH112_136XY_completed, sseqid %in% contigs_filt)
+ztable(table(Blast_GH112$SGB, Blast_GH112$protein))
+
+GH112_seqs_uniq<-as.character(unique(Blast_GH112$sseq))
+GH112_SGB_uniq<-as.character(unique(Blast_GH112$sseqid))
+
+Blast_GH112_136XY_filt<-subset(Blast_GH112_136XY_completed, Blast_GH112_136XY_completed$sseqid%in%GH112_SGB_uniq)
+table(Blast_GH112_136XY_filt$SGB, Blast_GH112_136XY_filt$protein)
+table(Blast_GH112_136XY_filt$SGB, Blast_GH112_136XY_filt$completed)
+table(Blast_GH112_136XY_filt$completed, Blast_GH112_136XY_filt$protein)
+
+blast_SGB_Prot_afterFilt_completed<-as.data.frame(unclass(table(Blast_GH112_136XY_filt$SGB,Blast_GH112_136XY_filt$protein,Blast_GH112_136XY_filt$completed)))
+
+Blast_GH112_136XY_filt_incomplete<-filter(Blast_GH112, completed=="No")
+
+ztable(table(Blast_GH112_136XY_filt$SGB, Blast_GH112_136XY_filt$protein))
+df.prot.SGB_ann<-as.data.frame(unclass(table(Blast_GH112_136XY_filt$SGB, Blast_GH112_136XY_filt$protein)))
+
+uniq_seqs_list<-list()
+
+df_info<-data.frame()
+for (i in 1:length(GH112_seqs_uniq)) {
+  seq=GH112_seqs_uniq[i]
+  df<- subset(Blast_GH112, sseq==seq)
+  uniq_seqs_list[[i]]<-df
+  df_info[i,1]<-dim(df)[1]
+  unique_SGB<-unique(df$SGB)
+  if(length(unique_SGB)==1){df_info[i,2]<-"TRUE"
+  df_info[i,3]<-unique_SGB
+  }else{df_info[i,2]<-"FALSE"
+  df_info[i,3]<-paste(unique_SGB, collapse = ".")}
+  unique_ref_genome<-unique(df$Ref_genome)
+  if(length(unique_ref_genome)==1){df_info[i,4]<-"TRUE"}else{df_info[i,4]<-"FALSE"}
+  df_info[i,5]<-df$Ref_genome[1]
+  df_info[i,6]<-df$pident2[1]
+  df_info[i,7]<-seq
+  df_info[i,8]<-paste(translate(s2c(seq)), collapse = "")
+  df_info[i,9]<-paste(df_info[i,3],df_info[i,5],"No", df_info[i,1],"Pid",round(df_info[i,6],2), sep = "_")
+  
+}
+colnames(df_info)<-c("No_seq","unique_SGB", "SGB", "unique_ref_genome", "Ref_genome", "Pid","seq_DNA","seq_prot","name")
+df_info$Pid_round<-round(df_info$Pid,2)
+row.names(df_info)<-paste(df_info$name,"No_seq",1:nrow(df_info),sep="_")
+
+df.fasta=data.frame(name=paste(df_info$name,"No_seq",1:nrow(df_info),sep="_"),seq=df_info$seq_DNA)
+
+
+rm(seq,df,i, unique_ref_genome, unique_SGB, df.fasta)
+#Proteins
+GH112_seqs_uniq_prot<-as.character(unique(df_info$seq_prot))
+df_info_prot<-data.frame()
+for (i in 1:length(GH112_seqs_uniq_prot)) {
+  seq=GH112_seqs_uniq_prot[i]
+  df<- subset(df_info, seq_prot==seq)
+  uniq_seqs_list[[i]]<-df
+  df_info_prot[i,1]<-dim(df)[1]
+  unique_SGB<-unique(df$SGB)
+  if(length(unique_SGB)==1){df_info_prot[i,2]<-"TRUE"
+  df_info_prot[i,3]<-unique_SGB
+  }else{df_info_prot[i,2]<-"FALSE"
+  df_info_prot[i,3]<-paste(unique_SGB, collapse = ".")}
+  unique_ref_genome<-unique(df$Ref_genome)
+  if(length(unique_ref_genome)==1){df_info_prot[i,4]<-"TRUE"}else{df_info_prot[i,4]<-"FALSE"}
+  df_info_prot[i,5]<-df$Ref_genome[1]
+  if(round(max(df$Pid),2)!=round(min(df$Pid),2)){
+  df_info_prot[i,6]<-paste(round(max(df$Pid),2),round(min(df$Pid),2), sep="_")}else{df_info_prot[i,6]<-round(max(df$Pid),2)}
+  df_info_prot[i,7]<-seq
+  df_info_prot[i,8]<-paste(df_info_prot[i,3],df_info_prot[i,5],"No", df_info_prot[i,1],"Pid",df_info_prot[i,6], sep = "_")
+  
+}
+colnames(df_info_prot)<-c("No_seq","unique_SGB", "SGB", "unique_ref_genome", "Ref_genome", "Pid","seq_prot","name")
+rm(seq,df,i, unique_ref_genome, unique_SGB)
+
+
+df_info_prot$Pid_round<-df_info_prot$Pid
+row.names(df_info_prot)<-paste(df_info_prot$name,"No_seq",1:nrow(df_info_prot),sep="_")
+df.fasta_prot=data.frame(name=paste(df_info_prot$name,"No_seq",1:nrow(df_info_prot),sep="_"),seq=df_info_prot$seq_prot)
+
+```
+
+
+#Functional annotation GH112 clusters from RAST
+```{r}
+
+Blast_GH112_136XY_completed_ann_contigs<-subset(Blast_GH112_136XY_completed, Blast_GH112_136XY_completed$sseqid%in%GH112_SGB_uniq)
+
+table(Blast_GH112_136XY_completed_ann_contigs$SGB, Blast_GH112_136XY_completed_ann_contigs$protein)
+df.prot.SGB_ann<-as.data.frame(unclass(table(Blast_GH112_136XY_completed_ann_contigs$SGB, Blast_GH112_136XY_completed_ann_contigs$protein)))
+
+GH136XY<-subset(Blast_GH112_136XY_completed_ann_contigs, protein=="GH136X" | protein=="GH136Y")
+
+GH112<-"1,3-beta-galactosyl-N-acetylhexosamine phosphorylase (EC 2.4.1.211)"
+Contigs_annt<-as.data.frame(read_tsv("/Volumes/xhf865/Butyrate_producers/Table_Results/SGB/contigs_annot.tsv", col_types = cols(
+  `Feature ID` = col_character(),
+  Type = col_character(),
+  Contig = col_character(),
+  Start = col_integer(),
+  Stop = col_integer(),
+  Frame = col_factor(),
+  Strand = col_character(),
+  `Length (bp)` = col_integer(),
+  Function = col_character(),
+  Subsystem = col_character(),
+  `NCBI GI` = col_character(),
+  locus = col_character()
+)))
+titles_rm<-which(Contigs_annt$Type=="Type")
+Contigs_annt<-Contigs_annt[-(titles_rm),]
+Contigs_annt$SGB<-sapply(strsplit(as.character(Contigs_annt$Contig), "_"), `[`, 1)
+Contigs_annt<-Contigs_annt[,-c(1,11:12)]
+Contigs_annt<-Contigs_annt%>%distinct()
+
+contigs_uniq_con<-as.character(unique(Contigs_annt$Contig))
+contigs_uniq_blast<-as.character(unique(Blast_GH112$sseqid))
+
+comparision_ann_blast<-contigs_uniq_blast[(which(!(contigs_uniq_blast%in%contigs_uniq_con)))]
+
+contigs_ann_SGB<-data.frame(contig=contigs_uniq_con,SGB=sapply(strsplit(as.character(contigs_uniq_con), "_"), `[`, 1))
+
+table(contigs_ann_SGB$SGB)
+#####FILTER NEW CONTIGS TAHTA CONTAHING GH112 AND GH1136
+Contigs_annt<-Contigs_annt %>% filter(Contig %in% contigs_filt)
+
+#########
+
+contigs_XY<-as.character(unique(GH136XY$sseqid))
+contigs_XY_ann<-as.character(unique(Contigs_annt$Contig))
+contigs_XY_ann_pos<-(which(contigs_XY%in%contigs_XY_ann))
+ann_extra<-data.frame(Contig=rep(0,length(contigs_XY_ann_pos)), Function=rep(0,length(contigs_XY_ann_pos)))
+for(h in (contigs_XY_ann_pos)){
+  p<-contigs_XY[h]
+  df<-subset(GH136XY, GH136XY$sseqid==p)
+  for(k in 1:nrow(df)){
+  start<-df$sstart[k]
+  stop<-df$send[k]
+  domain<-df$protein[k]
+  # GH136_pos<-which(Contigs_annt$Contig==p & Contigs_annt$Start==start & Contigs_annt$Stop==stop)
+GH136_pos<-which(Contigs_annt$Contig==p & ((Contigs_annt$Start-12)<=start & (Contigs_annt$Start+12)>=start) 
+                   &((Contigs_annt$Stop-12)<=stop & (Contigs_annt$Stop+12)>=stop) )
+  if(length(GH136_pos)!=0){
+  Contigs_annt[GH136_pos,]$Function<-paste("lacto-N-biosidase (EC 3.2.1.140)", domain, sep=" ")}}
+}
+## add annotation for 4936
+
+Blast_GH112_136XY_4936<-Blast_GH112_136XY_filt %>% filter(SGB =="4936" & protein %in%c("GH136Y"))
+
+Contigs_annt4936<-data.frame(Type=rep("CDS", 311),
+                              Contig=Blast_GH112_136XY_4936$sseqid,
+                              Start=Blast_GH112_136XY_4936$sstart,
+                              Stop=Blast_GH112_136XY_4936$send,
+                              Frame=rep(NA, 311),
+                              Strand=rep(NA, 311), 
+                              "Length(bp)"=Blast_GH112_136XY_4936$qlen,
+                              Function=rep(("lacto-N-biosidase (EC 3.2.1.140) GH136Y"),311), 
+                              Subsystem=rep(NA, 311),
+                              SGB=rep(4936, 311))
+for(i in 1:311){
+ contig<- Contigs_annt4936[i,]
+ if(contig$Start< contig$Stop){Contigs_annt4936$Strand[i]="+"}else{Contigs_annt4936$Strand[i]="-"}
+}
+
+colnames(Contigs_annt)[7]<-"Length.bp."
+
+Contigs_annt<-rbind(Contigs_annt,Contigs_annt4936 )
+
+
+#Replace D-3-phosphoglyceratedehydrogenase(EC1.1.1.95) and Alpha-1,2-mannosidase by GH136xY
+
+Contigs_annt_4940<-Contigs_annt %>%filter(SGB =="4940" )
+Blast_GH112_136XY_4940<-Blast_GH112_136XY_filt %>% filter(SGB =="4940" & protein %in%c("GH136X", "GH136Y"))
+
+Contigs_annt_4940_filt<-Contigs_annt %>%filter((SGB =="4940" & Function %in% c("lacto-N-biosidase (EC 3.2.1.140) GH136X", "lacto-N-biosidase (EC 3.2.1.140) GH136Y")))
+which(unique(Contigs_annt_4940$Contig) %in%as.character(unique(Blast_GH112_136XY_4940$sseqid)))
+
+a<-as.data.frame((unique(Blast_GH112_136XY_4940$sseqid)))
+colnames(a)<-"Contig"
+a<-subset(a, !(Contig%in%Contigs_annt_4940_filt$Contig))
+Blast_GH112_136XY_4940$sseqid<-as.character(Blast_GH112_136XY_4940$sseqid)
+Blast_GH112_136XY_4940_filt<-subset(Blast_GH112_136XY_4940,Blast_GH112_136XY_4940$sseqid%in%a$"Contig")
+
+Contigs_annt<-subset(Contigs_annt, !(Contigs_annt$Function=="D-3-phosphoglycerate dehydrogenase (EC 1.1.1.95)" |Contigs_annt$Function =="Alpha-1,2-mannosidase"))
+
+
+Contigs_annt4940<-data.frame(Type=rep("CDS", 62),
+                              Contig=Blast_GH112_136XY_4940_filt$sseqid,
+                              Start=Blast_GH112_136XY_4940_filt$sstart,
+                              Stop=Blast_GH112_136XY_4940_filt$send,
+                              Frame=rep(NA, 62),
+                              Strand=rep(NA, 62), 
+                              "Length(bp)"=Blast_GH112_136XY_4940_filt$qlen,
+                          Function=as.character(Blast_GH112_136XY_4940_filt$protein), 
+                              Subsystem=rep(NA, 62),
+                              SGB=rep("4940",62))
+Contigs_annt4940$Function<-as.character(Contigs_annt4940$Function)
+
+for(i in 1:62){
+ contig<- Contigs_annt4940[i,]
+ if(contig$Start< contig$Stop){Contigs_annt4940$Strand[i]="+"}else{Contigs_annt4940$Strand[i]="-"}
+ if(contig$Function=="GH136X"){Contigs_annt4940$Function[i]="lacto-N-biosidase (EC 3.2.1.140) GH136X"}else{Contigs_annt4940$Function[i]="lacto-N-biosidase (EC 3.2.1.140) GH136Y"}
+}
+
+Contigs_annt<-rbind(Contigs_annt,Contigs_annt4940)
+
+######################
+list_clusters<-list()
+multiple_GH112<-list()
+list_clusters_melt<-list()
+SGB<-unique(Contigs_annt$SGB)
+
+for(s in 1:length(SGB)){
+SGB_name<-SGB[s]
+df.SGB<-subset(Contigs_annt, SGB==SGB_name) 
+contigs<-as.character(unique(df.SGB$Contig))  
+for(i in 1:length(contigs)){
+target<-contigs[i]
+df.contig<-subset(Contigs_annt, Contig==target)
+
+for(j in 1:nrow(df.contig)){
+  if(as.character(df.contig$Strand[j]) == "-" ){
+    df.contig$Start_2[j]<-df.contig$Stop[j]
+    df.contig$Stop_2[j]<-df.contig$Start[j]
+    }else{
+    df.contig$Start_2[j]<-df.contig$Start[j]
+    df.contig$Stop_2[j]<-df.contig$Stop[j] 
+          }
+}
+df.contig<-df.contig[order(df.contig$Start_2),]
+GH112_position<-which(df.contig$Function==GH112)
+dim_df<-dim(df.contig)[1]
+if(length(GH112_position)==1){
+      if((GH112_position-11) >=0){
+      cluster_left<-df.contig[c((GH112_position-11):GH112_position),]
+      cluster_left$Cluster_pos<--((dim(cluster_left)[1]-1):0)}else{
+      cluster_left<-df.contig[c(1:GH112_position),]
+      cluster_left$Cluster_pos<--((dim(cluster_left)[1]-1):0)}
+      
+      if(GH112_position!=dim_df){
+      if((GH112_position+11)<dim_df){
+      cluster_rigth<-df.contig[c((GH112_position +1):(GH112_position+11)),]
+      cluster_rigth$Cluster_pos<-(1:dim(cluster_rigth)[1])}else{
+      cluster_rigth<-df.contig[c((GH112_position+1): dim_df),]
+      cluster_rigth$Cluster_pos<-(1:dim(cluster_rigth)[1])}}else{cluster_rigth<-NULL}
+cluster_df<-rbind(cluster_left,cluster_rigth)
+list_clusters[[SGB_name]][[target]]<-cluster_df}else{multiple_GH112[[SGB_name]]<-target
+            for(h in 1:length(GH112_position)){
+               GH112_position_m<-GH112_position[h]
+               
+                if((GH112_position_m-11) >=0){
+                cluster_left<-df.contig[c((GH112_position_m-11):GH112_position_m),]
+                cluster_left$Cluster_pos<--((dim(cluster_left)[1]-1):0)}else{
+                cluster_left<-df.contig[c(1:GH112_position_m),]
+                cluster_left$Cluster_pos<--((dim(cluster_left)[1]-1):0)}
+                
+                if(GH112_position_m!=dim_df){
+                if((GH112_position_m+11)<dim_df){
+                cluster_rigth<-df.contig[c((GH112_position_m +1):(GH112_position_m+11)),]
+                cluster_rigth$Cluster_pos<-(1:dim(cluster_rigth)[1])}else{
+                cluster_rigth<-df.contig[c((GH112_position_m+1): dim_df),]
+                cluster_rigth$Cluster_pos<-(1:dim(cluster_rigth)[1])}}else{cluster_rigth<-NULL}
+          cluster_df<-rbind(cluster_left,cluster_rigth)
+          list_clusters[[SGB_name]][[target]]<-cluster_df
+
+            }
+}
+}
+  list_clusters_melt[[SGB_name]]<-ldply(list_clusters[[SGB_name]], rbind)
+}
+rm(cluster_df, df.contig,cluster_rigth, cluster_left)
+
+
+### Functions along each SGBs
+list_cluster_functions<-list()
+for(i in 1:length(list_clusters_melt)){
+  SGB_functions<-list_clusters_melt[[i]]
+  No_contigs<-length(unique(SGB_functions$Contig))
+  table_functions<-as.data.frame(unclass(table(SGB_functions$Function)))
+  colnames(table_functions)[1]<-"Number"
+  table_functions$Percentage<-table_functions$Number/No_contigs
+  SGB<-sapply(strsplit(as.character(SGB_functions$Contig[1]), "_"), `[`, 1)
+  table_functions$SGB<-SGB
+  table_functions$functions<-row.names(table_functions)
+  list_cluster_functions[[i]]<-table_functions
+    }
+
+rm(table_functions,No_contigs, SGB)
+
+df_clusters_melt<-ldply(list_clusters_melt, rbind)
+
+###########3
+#Functions along all SGBs
+
+df_clusters<-ldply(list_clusters_melt, rbind)
+Functions_df<-as.data.frame(unclass(table(df_clusters$Function,df_clusters$SGB )))
+
+#colnames(Functions_df)[1]<-"No"
+Functions_df$functions<-row.names(Functions_df)
+functions_subsystem<-as.data.frame(unclass(table( df_clusters$Function, df_clusters$Subsystem)))
+
+
+df_clusters_SGB_filt<-subset(Functions_df, functions != "hypothetical protein" &functions != "repeat region")
+color_SGB<-c("#011c85","#037e91","#039e99","#9e035e", "#878a01", "#91cf02", "#cfb702", "#73014f", "#013547", "#f57d05", "#ed2405")
+names(color_SGB)<-c("4925", "4882" ,"4951","4950", "4940", "4936", "4938", "4949", "4654", "4939", "4942")
+
+functions_SGB<-ggplot(data=df_clusters_SGB_filt, aes(x=functions, y=Number, fill=SGB)) +
+  geom_bar(stat="identity")  + theme_minimal() +
+  theme(axis.text = element_text(size = 11), legend.position="none") +
+  labs(x ="", y="") +
+  theme(plot.title = element_text(size=15), panel.grid.major.y = element_blank(), panel.grid.minor.x = element_blank()) +
+  coord_flip() + facet_grid(.~SGB, scales="free") + theme(axis.text.x = element_text(angle = 45, hjust = 1))+scale_fill_manual("",values = color_SGB)
+
+
+#####Functions positions 
+
+df_clusters_filt<-subset(df_clusters, Function != "repeat region")
+Functions_pos<-as.data.frame(unclass(table(df_clusters_filt$Function, df_clusters_filt$Cluster_pos)))
+
+# write.csv(Functions_pos, file="~/NetworkShares/xhf865/Butyrate_producers/Table_Results/contigs_GH112/Functions_pos_2.csv" )
+# write.csv(Functions_df, file="~/NetworkShares/xhf865/Butyrate_producers/Table_Results/contigs_GH112/Functions_SGB_2.csv" )
+Functions_pos$Sum<-rowSums(Functions_pos)
+Functions_pos$functions<-row.names(Functions_pos)
+
+
+```
+
+#Locus structure
+```{r Locus structure}
+#117 functions
+functions_info<-data.frame(Functions_names=row.names(Functions_pos), Sum=Functions_pos$Sum )
+
+#remove functions present only 1 time
+functions_info_filt<-functions_info %>% filter(Sum>1)
+
+
+functions_info_filt<-subset(functions_info_filt, Functions_names != "no significant homology.")
+#89 functions 	".",	
+#symbols<-c("@",	"0",	"1",	"2",	"3",	"4",	"5",	"6",	"7",	"8",	"9",	"_",	"-",	",",	";",	":",	"!",	"?",	"(",	")",	"[",	"]",	"{",	"}",	"*",	"/",		"&",	"#",	"%",	"^","'",	"+",	"<",	"=","X",	">",	"|",	"~",	"$",	"a",	"A",	"B",	"b",	"C",	"c",	"D",	"d",	"e",	"E",	"F",	"f",	"g",	"G",	"H",	"h",	"i",	"I",	"j",	"J",	"k",	"K",	"L",	"m",	"M",	"N",	"n",	"O",	"o",	"p",	"P",	"q",	"Q",	"r",	"R",	"s",	"S",	"T",	"t",	"u",	"U",	"v",	"V",	"w",	"W",	"x",	"Y",	"y",	"Z","'")
+symbols<-c("@",	"_",	"-",	",",	";",	":",	"!",	"?",	"(",	")",	"[",	"]",	"{",	"}",	"*",	"/",		"&",	"#",	"%",	"^","'",	"+",	"<",	"=","|","X",	">",		"~","A","a"	,	"$","B","b","c"	,"C","d",	"D",	"E","e"	,"F",		"G","g",	"H","h",	"I",		"J","j"	,"K",	"L",	"m",	"M", 	"N",	"O",	"P",	"q",	"Q",	"r",	"R",	"s",	"S",	"T",	"t",	"u",	"U",	"v",	"V",	"w",	"W")
+
+
+functions_info_filt$Character<-symbols
+
+df_clusters_filt2<-df_clusters %>% filter(df_clusters$Function %in% functions_info_filt$Functions_names)
+
+df_clusters_filt2$Symbol<-NA
+library(qdapTools)
+ #Add symbols to each function
+df_clusters_filt2$Symbol<-lookup_e(df_clusters_filt2$Function,functions_info_filt$Functions_names, functions_info_filt$Character )
+
+#Create loci "String"
+contig<-unique(df_clusters_filt2$Contig)
+
+df_loci<-data_frame(Contig=contig, SGB=NA, loci=NA, Strand=NA, Frame=NA)
+df_loci$SGB<-lookup_e(df_loci$Contig, df_clusters_filt2$Contig,df_clusters_filt2$SGB )
+row.names(df_loci)<-df_loci$Contig
+df_clusters_filt2$re.position<-NA
+df_clusters_filt_reord<-data.frame()
+
+
+for(s in 1:length(contig)){
+ #subset table by contig
+c<-contig[s]
+df_loci_1<-subset(df_clusters_filt2, Contig==c) 
+#reorder loci base on GH112 strand
+Gh112_pos<-which(df_loci_1$Cluster_pos==0)
+if(df_loci_1$Strand[Gh112_pos]=="-"){df_loci_1$re.position=df_loci_1$Cluster_pos*(-1)}else{df_loci_1$re.position=df_loci_1$Cluster_pos}
+df_loci_1<-df_loci_1[order(df_loci_1$re.position),]
+#Create loci as string keeping the order
+loci<-paste(df_loci_1$Symbol[], sep="±", collapse = "±")
+loci<-str_replace_all(loci, "±", "")
+Gh112_pos<-which(df_loci_1$Cluster_pos==0)
+#loci strand
+if(Gh112_pos!=1 &Gh112_pos!=dim(df_loci_1)[1]){
+strand_1<-paste0(df_loci_1$Strand[1:(Gh112_pos-1)],collapse ="")
+strand_2<-paste0("[",df_loci_1$Strand[Gh112_pos], "]",collapse ="")
+strand_3<-paste0(df_loci_1$Strand[(Gh112_pos+1):dim(df_loci_1)[1]],collapse ="")
+strand<-paste0(strand_1,strand_2,strand_3)} else if(Gh112_pos==1){
+strand_2<-paste0("[",df_loci_1$Strand[Gh112_pos], "]",collapse ="")
+strand_3<-paste0(df_loci_1$Strand[(Gh112_pos+1):dim(df_loci_1)[1]],collapse ="")
+strand<-paste0(strand_2,strand_3)}else if(Gh112_pos==dim(df_loci_1)[1]){
+strand_1<-paste0(df_loci_1$Strand[1:(Gh112_pos-1)],collapse ="")
+strand_2<-paste0("[",df_loci_1$Strand[Gh112_pos], "]",collapse ="")
+strand<-paste0(strand_1,strand_2)}
+
+#loci ORF
+
+#loci strand
+if(Gh112_pos!=1 &Gh112_pos!=dim(df_loci_1)[1]){
+Frame_1<-paste0(df_loci_1$Frame[1:(Gh112_pos-1)],collapse ="")
+Frame_2<-paste0("[",df_loci_1$Frame[Gh112_pos], "]",collapse ="")
+Frame_3<-paste0(df_loci_1$Frame[(Gh112_pos+1):dim(df_loci_1)[1]],collapse ="")
+Frame<-paste0(Frame_1,Frame_2,Frame_3)} else if(Gh112_pos==1){
+Frame_2<-paste0("[",df_loci_1$Frame[Gh112_pos], "]",collapse ="")
+Frame_3<-paste0(df_loci_1$Frame[(Gh112_pos+1):dim(df_loci_1)[1]],collapse ="")
+Frame<-paste0(Frame_2,Frame_3)}else if(Gh112_pos==dim(df_loci_1)[1]){
+Frame_1<-paste0(df_loci_1$Frame[1:(Gh112_pos-1)],collapse ="")
+Frame_2<-paste0("[",df_loci_1$Frame[Gh112_pos], "]",collapse ="")
+Frame<-paste0(Frame_1,Frame_2)}
+
+#add loci to df
+
+df_loci[c,]$loci<-loci
+df_loci[c,]$Strand<-strand
+df_loci[c,]$Frame<-Frame
+df_clusters_filt_reord<-rbind(df_clusters_filt_reord, df_loci_1)
+}
+rm (c,loci, df_loci_1)
+
+# Compute distance between strings
+
+library(stringdist)
+
+loci<-df_loci$loci
+names(loci)<-df_loci$Contig
+
+
+distantMatrix<-stringdistmatrix(df_loci$loci,method = "osa")
+#distantMatrix<-as.dist(adist(df_loci$loci, fixed=TRUE, partial=TRUE))
+#Plot PCoA
+dist_pc<-ape::pcoa(distantMatrix)
+
+metadata=df_loci
+dist_pcjoint <- data.frame(dist_pc$vectors[,1:2])
+row.names(dist_pcjoint)<-names(loci)
+SGBs_dist<-sapply(strsplit(as.character(row.names(dist_pcjoint)), "_"), `[`, 1)
+SGBs_dist<-revalue(SGBs_dist, c("4654"= "Roseburia_sp_CAG_380 (4654)",
+                                "4882" = "Roseburia_sp_CAG_100 (4882)", 
+                                "4925"= "Roseburia_faecis (4925)", 
+                                "4936"= "Roseburia_hominis (4936)",
+                                "4938"="Roseburia_sp (4938)",
+                                "4939"= "Roseburia (4939)",
+                                "4940"="Roseburia_inulinivorans (4940)", 
+                                "4942"="Roseburia (4942)",
+                                "4949" ="Roseburia (4949)",
+                                "4950" = "Roseburia (4950)", 
+                                "4951"="Roseburia_intestinalis (4951)"))
+dist_pcjoint$SGB<-SGBs_dist
+#names(color_SGB)<-c("4925", "4882" ,"4951","4950", "4940", "4936", "4938", "4949")
+names(color_SGB)<-c( "Roseburia_faecis (4925)", 
+                     "Roseburia_sp_CAG_100 (4882)",
+                     "Roseburia_intestinalis (4951)",
+                     "Roseburia (4950)", 
+                     "Roseburia_inulinivorans (4940)",
+                     "Roseburia_hominis (4936)", 
+                     "Roseburia_sp (4938)" ,
+                     "Roseburia (4949)", 
+                     "Roseburia_sp_CAG_380 (4654)", 
+                     "Roseburia (4939)",
+                     "Roseburia (4942)")
+
+vars<-apply(dist_pc$vectors, 2,var)
+#each variable explains:
+vars2<-vars/sum(vars)
+vars2[1:2]
+PcoA_ordered<-ggplot(dist_pcjoint, aes(x = Axis.1, y = Axis.2, color = SGB)) + geom_point() +theme_bw()+theme(legend.position = "top")+scale_color_manual("",values = color_SGB)+stat_ellipse(type = "norm", linetype = 2) +xlab(paste("PCo1", round(100*(vars2[1]),2), "%")) +ylab(paste("PCo2", round(100*(vars2[2]),2), "%"));PcoA_ordered
+
+
+
+```
+
+#4940
+```{r}
+Contigs_annt_4940<-Contigs_annt %>%filter(SGB =="4940" )
+Blast_GH112_136XY_4940<-Blast_GH112_136XY_filt %>% filter(SGB =="4940" & protein %in%c("GH136X", "GH136Y", "GH112"))
+
+Contigs_annt_4940_filt<-Contigs_annt %>%filter((SGB =="4940" & Function %in% c("lacto-N-biosidase (EC 3.2.1.140) GH136X", "lacto-N-biosidase (EC 3.2.1.140) GH136Y")))
+which(unique(Contigs_annt_4940$Contig) %in%as.character(unique(Blast_GH112_136XY_4940$sseqid)))
+
+a<-as.data.frame((unique(Blast_GH112_136XY_4940$sseqid)))
+colnames(a)<-"Contig"
+a<-subset(a, !(Contig%in%Contigs_annt_4940_filt$Contig))
+
+
+contigs_XY<-as.character(unique(a$Contig))
+contigs_XY_ann<-as.character(unique(Contigs_annt_4940$Contig))
+contigs_XY_ann_pos<-(which(contigs_XY%in%contigs_XY_ann))
+annotation_4940_X<-data.frame(Conting=(rep(NA, length(contigs_XY))),
+                            StartB=(rep(NA, length(contigs_XY))),
+                            StopB=(rep(NA, length(contigs_XY))),
+                            StartR=(rep(NA, length(contigs_XY))),
+                            StopR=(rep(NA, length(contigs_XY))),
+                            Function=(rep(NA, length(contigs_XY))),
+                            domain=(rep(NA, length(contigs_XY))))
+annotation_4940_Y<-data.frame(Conting=(rep(NA, length(contigs_XY))),
+                            StartB=(rep(NA, length(contigs_XY))),
+                            StopB=(rep(NA, length(contigs_XY))),
+                            StartR=(rep(NA, length(contigs_XY))),
+                            StopR=(rep(NA, length(contigs_XY))),
+                            Function=(rep(NA, length(contigs_XY))),
+                            domain=(rep(NA, length(contigs_XY))))
+
+
+for(h in (contigs_XY_ann_pos)){
+  p<-contigs_XY[h]
+  df<-subset(GH136XY, GH136XY$sseqid==p)
+  df2<-subset(Contigs_annt_4940, Contig==p)
+  for(k in 1:nrow(df)){
+  
+  start<-df$sstart[k]
+  stop<-df$send[k]
+  domain<-df$protein[k]
+
+GH136_pos<-which(Contigs_annt_4940$Contig==p & (Contigs_annt_4940$Stop)==start)
+
+ if(domain=="GH136X")  {
+      if(length(GH136_pos)!=0){
+      annotation_4940_X$Conting[h]<-p
+      annotation_4940_X$StartB[h]<-start
+      annotation_4940_X$StopB[h]<-stop
+      annotation_4940_X$StartR[h]<-Contigs_annt_4940[GH136_pos,"Start"]
+      annotation_4940_X$StopR[h]<-Contigs_annt_4940[GH136_pos,"Stop"] 
+      annotation_4940_X$Function[h]<-Contigs_annt_4940[GH136_pos, "Function"]
+      annotation_4940_X$domain[h]<-domain
+      }}
+ if(domain=="GH136Y")  {
+   
+      if(length(GH136_pos)!=0){
+      annotation_4940_Y$Conting[h]<-p
+      annotation_4940_Y$StartB[h]<-start
+      annotation_4940_Y$StopB[h]<-stop
+      annotation_4940_Y$StartR[h]<-Contigs_annt_4940[GH136_pos,"Start"]
+      annotation_4940_Y$StopR[h]<-Contigs_annt_4940[GH136_pos,"Stop"] 
+      annotation_4940_Y$Function[h]<-Contigs_annt_4940[GH136_pos, "Function"]
+      annotation_4940_Y$domain[h]<-domain
+      }}
+
+  }}
+
+
+
+annotation_4940<-rbind(annotation_4940_X,annotation_4940_Y)
+
+```
+
+#4936
+```{r}
+Contigs_annt_4936<-Contigs_annt %>%filter(SGB =="4936" )
+Blast_GH112_136XY_4936<-Blast_GH112_136XY_filt %>% filter(SGB =="4936" & protein %in%c("GH136X", "GH136Y","GH112"))
+
+Contigs_annt_4936_filt<-Contigs_annt %>%filter((SGB =="4936" & Function %in% c("lacto-N-biosidase (EC 3.2.1.140) GH136X", "lacto-N-biosidase (EC 3.2.1.140) GH136Y")))
+which(unique(Contigs_annt_4936$Contig) %in%as.character(unique(Blast_GH112_136XY_4936$sseqid)))
+
+a<-as.data.frame((unique(Blast_GH112_136XY_4936$sseqid)))
+colnames(a)<-"Contig"
+#a<-subset(a, !(Contig%in%Contigs_annt_4936_filt$Contig))
+
+
+contigs_XY<-as.character(unique(a$Contig))
+contigs_XY_ann<-as.character(unique(Contigs_annt_4936$Contig))
+contigs_XY_ann_pos<-(which(contigs_XY%in%contigs_XY_ann))
+annotation_4936_X<-data.frame(Conting=(rep(NA, length(contigs_XY))),
+                            StartB=(rep(NA, length(contigs_XY))),
+                            StopB=(rep(NA, length(contigs_XY))),
+                            StartR=(rep(NA, length(contigs_XY))),
+                            StopR=(rep(NA, length(contigs_XY))),
+                            Function=(rep(NA, length(contigs_XY))),
+                            domain=(rep(NA, length(contigs_XY))))
+annotation_4936_Y<-data.frame(Conting=(rep(NA, length(contigs_XY))),
+                            StartB=(rep(NA, length(contigs_XY))),
+                            StopB=(rep(NA, length(contigs_XY))),
+                            StartR=(rep(NA, length(contigs_XY))),
+                            StopR=(rep(NA, length(contigs_XY))),
+                            Function=(rep(NA, length(contigs_XY))),
+                            domain=(rep(NA, length(contigs_XY))))
+
+
+for(h in (contigs_XY_ann_pos)){
+  p<-contigs_XY[h]
+  df<-subset(Blast_GH112_136XY_4936, Blast_GH112_136XY_4936$sseqid==p)
+  df2<-subset(Contigs_annt_4936, Contig==p)
+  for(k in 1:nrow(df)){
+  
+  start<-df$sstart[k]
+  stop<-df$send[k]
+  domain<-df$protein[k]
+
+GH136_pos<-which(Contigs_annt_4936$Contig==p & (Contigs_annt_4936$Stop)==start)
+
+ if(domain=="GH136Y")  {
+      if(length(GH136_pos)!=0){
+      annotation_4936_Y$Conting[h]<-p
+      annotation_4936_Y$StartB[h]<-start
+      annotation_4936_Y$StopB[h]<-stop
+      annotation_4936_Y$StartR[h]<-Contigs_annt_4936[GH136_pos,"Start"]
+      annotation_4936_Y$StopR[h]<-Contigs_annt_4936[GH136_pos,"Stop"] 
+      annotation_4936_Y$Function[h]<-Contigs_annt_4936[GH136_pos, "Function"]
+      annotation_4936_Y$domain[h]<-domain
+      }}
+  }}
+
+if(domain="GH136Y"){
+       
+         if(length(GH136_pos)!=0){
+        annotation_4936_Y$Conting[h]<-p
+        annotation_4936_Y$StartB[h]<-start
+        annotation_4936_Y$StopB[h]<-stop
+        annotation_4936_Y$StartR[h]<-Contigs_annt_4936[GH136_pos,"Start"]
+        annotation_4936_Y$StopR[h]<-Contigs_annt_4936[GH136_pos,"Stop"] 
+        annotation_4936_Y$Function[h]<-Contigs_annt_4936[GH136_pos, "Function"]
+        annotation_4936_Y$domain[h]<-domain 
+        }}
+
+
+annotation_4936<-rbind(annotation_4936_X,annotation_4936_Y)
+contigs_XY_filt<-a %>%filter(!Contig %in% unique(annotation_4936$Conting))
+
+```
+
+
+#plot clusters
+```{r}
+table_SGB_loci<-as.data.frame(unclass(table(df_loci$loci,df_loci$SGB )))
+table_SGB<-as.data.frame(unclass(table(df_loci$SGB )))
+library(ggplot2)
+library(gggenes)
+
+contigs_toPlot<-c("4925_NODE_1361_length_13386_cov_29.1",
+"4936_NODE_104_length_97813_cov_19.3647",
+"4940_NODE_127_length_107262_cov_14.0891",
+"4949_NODE_822_length_21714_cov_5.50344",
+"4950_NODE_12_length_348601_cov_18.9393", 
+"4951_NODE_106_length_140148_cov_9.51666",
+"4882_NODE_2075_length_19767_cov_57.5352",
+"4938_NODE_2576_length_12321_cov_8.63729")
+
+df_filt<-subset(df_clusters_filt_reord,Contig%in%contigs_toPlot)
+
+#colors_Func<-c(wes_palette("Darjeeling1")[1:4],wes_palette("FantasticFox1")[2:3],wes_palette("Cavalcanti1"),wes_palette("GrandBudapest1"))
+library(cptcity)
+library("rcartocolor")
+library("RColorBrewer")
+
+colors_Func<-c("#FF0000", "#00A08A", "#35274A" ,"#F98400","#E2D200", "#46ACC8", "#D8B70A","#02401B","#A2A475" ,"white", "#972D15" ,"#F1BB7B","#FD6467", "#5B1A18","#D67236", "#72435C","#8AE2E0")
+#colors_Func<-c("#104210", "#6A8820", "#D3C02F" ,"#FB8DA0","#E42256", "#FEDE00","#01949A","#F65156","#88070B" ,"#EDDFD0", "#F6A21E" ,"#3A5673","#BF0D70", "#72435C","#8AE2E0")
+
+names(colors_Func)<-c("ABC transporter permease protein ",  "ABC transporter SBP" ,    "Aminoacid metabolism" ,"Biosynthesis of secondary metabolites", "Carbohydrate metabolism" , "DNA translation","GH112" , "GH136x",  "GH136y", "Hypothetical protein" , "Metabolism of cofactors and vitamins", "Other glycoside hydrolases" , "Other polyssacharides lyases ", "Other transport proteins" , "Transcription regulation" , "D-3-phosphoglycerate dehydrogenase (EC 1.1.1.95)", "Alpha-1,2-mannosidase")                                   
+
+functions_colors<-c(wes_palette("Zissou1"))
+
+Contigs_SGB<-c( "4925_NODE_1361_length_13386_cov_29.1" ="Roseburia_faecis (4925)",
+"4936_NODE_104_length_97813_cov_19.3647"="Roseburia_hominis (4936)",     
+"4940_NODE_127_length_107262_cov_14.0891"="Roseburia_inulinivorans (4940)",   "4949_NODE_822_length_21714_cov_5.50344"="Roseburia (4949)",
+"4950_NODE_12_length_348601_cov_18.9393"="Roseburia (4950)",         
+"4951_NODE_106_length_140148_cov_9.51666"= "Roseburia_intestinalis (4951)",      
+"4882_NODE_2075_length_19767_cov_57.5352" ="Roseburia_sp_CAG_100 (4882)",    "4938_NODE_2576_length_12321_cov_8.63729"="Roseburia_sp (4938)")
+
+
+annotated_functions<-read.xlsx("/Volumes/xhf865/Butyrate_producers/Butyrate_producers/Diabimmune/Functions_groups.xlsx", sheetIndex = 1, header = F)
+annotated_functions<- annotated_functions[,-c(3:5)]
+
+df_filt$annot<-lookup_e(df_filt$Function,annotated_functions$X1, annotated_functions$X2 )
+
+df_filt$annot[which(df_filt$Function=="D-3-phosphoglycerate dehydrogenase (EC 1.1.1.95)")]<-"D-3-phosphoglycerate dehydrogenase (EC 1.1.1.95)"
+
+df_filt$annot[is.na(df_filt$annot)]<-"Hypothetical protein"
+
+# ann_4949<-which(df_filt$.id== "4949_NODE_822_length_21714_cov_5.50344")
+# for(i in ann_4949 ){
+#  start<- df_filt[i,4]
+#  stop<-df_filt[i,5]
+#  df_filt[i,4]<-stop
+#  df_filt[i,5]<-start
+# }
+
+dummies <- make_alignment_dummies(df_filt, aes(xmin = Start, xmax = Stop, y = Contig, id = annot), on = "GH112")
+
+operon1_1<-ggplot(df_filt, aes(xmin = Start, xmax = Stop, y = Contig, fill = annot)) +geom_gene_arrow()+geom_blank(data = dummies) +facet_wrap(~ Contig, scales = "free", ncol = 1) + theme_genes()+theme()+scale_y_discrete(labels=Contigs_SGB)+ylab(NULL)+ ggtitle("Roseburia GH112 neighborhood")+scale_fill_manual(values = colors_Func);
+ 
+pdf(file = "/Volumes/xhf865/Butyrate_producers/Butyrate_producers/Figures/Figure15_d.pdf", width = 12, height = 7)
+operon1_1
+dev.off()
+```
+
+
+#PCoA 1397 clusters
+```{r}
+########
+clusters_functions<-as.data.frame(unclass(table(df_clusters$Contig,df_clusters$Function)))
+clusters_functions[clusters_functions >0] <- 1
+dist <- vegdist((clusters_functions),  method = "jaccard")
+dist_pc<-ape::pcoa(dist)
+head(dist_pc$values$Relative_eig)
+metadata=unique(data_frame(contig=df_clusters$Contig, SGB=df_clusters$SGB))
+dist_pcjoint <- data.frame(dist_pc$vectors[,1:2])
+SGBs_dist<-sapply(strsplit(as.character(row.names(dist_pcjoint)), "_"), `[`, 1)
+SGBs_dist<-revalue(SGBs_dist, c("4654"= "Roseburia_sp_CAG_380 (4654)",
+                                "4882" = "Roseburia_sp_CAG_100 (4882)", 
+                                "4925"= "Roseburia_faecis (4925)", 
+                                "4936"= "Roseburia_hominis (4936)",
+                                "4938"="Roseburia_sp (4938)",
+                                "4939"= "Roseburia (4939)",
+                                "4940"="Roseburia_inulinivorans (4940)", 
+                                "4942"="Roseburia (4942)",
+                                "4949" ="Roseburia (4949)",
+                                "4950" = "Roseburia (4950)", 
+                                "4951"="Roseburia_intestinalis (4951)"))
+dist_pcjoint$SGB<-SGBs_dist
+#names(color_SGB)<-c("4925", "4882" ,"4951","4950", "4940", "4936", "4938", "4949")
+names(color_SGB)<-c( "Roseburia_faecis (4925)", 
+                     "Roseburia_sp_CAG_100 (4882)",
+                     "Roseburia_intestinalis (4951)",
+                     "Roseburia (4950)", 
+                     "Roseburia_inulinivorans (4940)",
+                     "Roseburia_hominis (4936)", 
+                     "Roseburia_sp (4938)" ,
+                     "Roseburia (4949)", 
+                     "Roseburia_sp_CAG_380 (4654)", 
+                     "Roseburia (4939)",
+                     "Roseburia (4942)")
+ggplot(dist_pcjoint, aes(x = Axis.1, y = Axis.2, color = SGB)) + geom_point() +theme_bw()+theme(legend.position = "top")+scale_color_manual("",values = color_SGB)+stat_ellipse(type = "norm", linetype = 2) +xlab("PCoA 1 [56.3%]") +ylab("PCoA 2 [16%]")
+
+```
